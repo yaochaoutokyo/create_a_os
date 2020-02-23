@@ -22,7 +22,8 @@ section loader vstart=LOADER_BASE_ADDR
 
     ; flush pipeline
     ; 0x0008 is 0x0000_0000_0000_1000, means index=1, TI=1, RPL=0
-    jmp 0x0008:p_model_start 
+    ; notice: dword requires complier to take effactive address as 32 bits instead of 16 bits
+    jmp dwrod 0x0008:p_model_start 
 
     [bits 32]
 p_model_start:
