@@ -16,7 +16,7 @@ boot: disk
 ata0: enabled=1,ioaddr1=0x1f0, ioaddr2=0x3f0, irq=14
 
 # disk info
-ata0-master: type=disk, path="/Users/yaochao/os_study/create_a_os/ch5/ex-1/c.img", mode=flat
+ata0-master: type=disk, path="/Users/yaochao/os_study/create_a_os/ch5/ex-2/c.img", mode=flat
 
 # where do we send log messages?
 log: bochsout.txt

@@ -12,8 +12,10 @@ gdt_ptr:
     dd gdt_base
 gdt_remain:
     times 60 dq 0
-message:
-    db "Protection: "
+message_pg:
+    db "Protection model started!",0
+message_pr:
+    db "Page model started!",0
 mem_size:
     dd 0
 ards_buf:
@@ -21,6 +23,8 @@ ards_buf:
 ards_count:
     dw 0
 
+; function: read memroy size, save it to [mem_size]
+; must run in real model
 read_mem_size:
     ; firstly, try 0xe820 subroutine
     ; input eax,ebx(next ards),es:di(destination),ecx(length of ards),edx(signature, 'SMAP')
@@ -136,36 +140,110 @@ loader_start:
     ; flush pipeline
     ; 0x0008 is 0x0000_0000_0000_1000, means index=1, TI=1, RPL=0
     ; notice: dword requires complier to take effactive address as 32 bits instead of 16 bits
-    jmp dword 0x0008:p_model_start 
+    jmp dword 0x0008:pr_model_start 
 
     [bits 32]
-p_model_start:
+; function: print message to screen
+; must run in protection model
+; input: esi -> message source address; edi -> vedio memory address
+print_out:
+    push esi
+    push edi
+    push eax
+.print_loop:
+    mov al,[esi]
+    cmp byte al,0
+    jz .print_over
+    mov [edi + 0xb8000],al
+    inc esi
+    add edi,2
+    jmp .print_loop
+.print_over:
+    pop eax
+    pop edi
+    pop esi
+    ret
+
+; function: set up page table
+setup_page_table:
+; prepare page directory table
+    ; 1.clear 4kb space
+    mov ecx,1024
+    mov ebx,PAGE_DIR_TABLE_ADDR
+.clear_4k_dir_table_loop
+    mov dword [ebx],0
+    add ebx,4
+    loop .clear_4k_dir_table_loop
+
+    ; 2.set 0 and 768 term to the high 4M space
+    mov eax,PAGE_DIR_TABLE_ADDR
+    add eax,0x1000
+    ; 0x7 means US=1,RW=1,P=1
+    add eax,0x7
+    mov [PAGE_DIR_TABLE_ADDR + 0x0],eax
+    mov [PAGE_DIR_TABLE_ADDR + 0xc00],eax
+    ; set the last PDE to be page directory table itself
+    sub eax,0x1000
+    mov [PAGE_DIR_TABLE_ADDR + 0xffc],eax
+
+    ; prepare page table
+    ; map high 1M space
+    mov ebx,PAGE_DIR_TABLE_ADDR + 0x1000
+    mov esi,0
+    mov ecx,256
+    mov eax,0x7
+.map_high_1M_loop:
+    mov [ebx + 4*esi],eax
+    inc esi
+    add eax,0x1000
+    loop .map_high_1M_loop
+
+    ; create other PDE for kernel space
+    mov eax,PAGE_DIR_TABLE_ADDR
+    add eax,0x2000
+    add eax,0x7
+    mov ebx,PAGE_DIR_TABLE_ADDR
+    mov ecx,254
+    mov esi,769
+.create_kernel_space_loop:
+    mov [ebx+4*esi],eax
+    inc esi
+    add eax,0x1000
+    loop .create_kernel_space_loop
+    ret
+
+pr_model_start:
     mov eax,0x0010
     mov ds,eax
-    mov es,eax
     mov ss,eax
     ; for 32bits model, esp is the stack pointer
     mov esp,LOADER_BASE_ADDR
-    mov esi,message
-    ; edi store address for vedio memory
-    mov edi,0xb8000
 
-.print:
-    mov al,[esi]
-    cmp byte al,0
-    jz .clear
-    mov [es:edi],al
+    ; print message in protection model
+    mov esi,message_pr
+    mov edi,0
+    call print_out
 
-    inc esi
-    add edi,2
-    jmp .print
+    ; setup page
+    call setup_page_table
+    ; change gdt base address, map it to high 1G space
+    sgdt [gdt_ptr]
+    add dword [gdt_ptr + 2],0xc0000000
+    ; set cr3
+    mov eax,PAGE_DIR_TABLE_ADDR
+    mov cr3,eax
+    ; open PG in cr0
+    mov eax,cr0
+    or eax,0x80000000
+    mov cr0,eax
+    ; reload gdt
+    lgdt [gdt_ptr]
 
-.clear:
-    cmp edi,4320
-    jz .end
-    mov byte [es:edi],0
-    add edi,2
-    loop .clear
+     ; print message in protection model
+    mov esi,message_pg
+    mov edi,160
+    call print_out
 
 .end:
-    jmp $
+    hlt
+    jmp .end
