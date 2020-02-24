@@ -7,6 +7,7 @@ all:clean
 	dd if=loader.bin of=c.img bs=512 count=1 seek=2 conv=notrunc
 
 clean:
+	rm -f bochsout.txt
 	rm -f mbr.bin
 	rm -f loader.bin
 	rm -f c.img

@@ -1,0 +1,8 @@
+; mbr and loader
+LOADER_BASE_ADDR equ 0x900
+LOADER_START_SECTOR equ 0x2
+
+; GDT definition (flat model)
+DESC_ZERO equ 0x00000000_00000000
+DESC_CODE_FLAT equ 0x00cf9800_0000ffff
+DESC_DATA_FLAT equ 0x00cf9200_0000ffff
